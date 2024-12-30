@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "fantasy-trade-engine"
+version = "0.1.0"
+description = ""
+authors = ["nickmilikich <nickmilikich@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "^2.2.3"
+streamlit = "^1.41.1"
+deltalake = "^0.22.3"
+pyyaml = "^6.0.2"
+loguru = "^0.7.3"
+
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^4.0.1"
+ruff = "^0.8.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
