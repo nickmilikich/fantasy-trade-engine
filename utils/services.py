@@ -35,7 +35,7 @@ def get_recommended_trades(
     other_users : str | list[str] | None = None
         Other user(s) to be considered for trading with. If None, all other users in the league are
         considered.
-    
+
     Returns
     -------
     pd.DataFrame
@@ -46,13 +46,13 @@ def get_recommended_trades(
             - "User Projection": User's projected average weekly score after the trade.
             - "Other Projection": Trade partner's projected average weekly score after the trade.
     """
-    
+
     projections_data = run_data_pipeline(league_id=league_id, year=year)
-    
+
     # Filter to relevant positions
     if positions is not None:
         projections_data = projections_data[projections_data["position"].isin(positions)]
-    
+
     # Filter to relevant user(s)
     if other_users is not None:
         if isinstance(other_users, str):
@@ -61,7 +61,7 @@ def get_recommended_trades(
             (projections_data["user_id"] == user_id)
             | (projections_data["user_id"].isin(other_users))
         ]
-    
+
     # Execute trades
     recommended_trades = _get_recommended_trades(
         player_projections=projections_data,
@@ -69,29 +69,34 @@ def get_recommended_trades(
         user_id=user_id,
     )
     recommended_trades = pd.DataFrame(recommended_trades)
-    
+
     # Format trade data frame:
     # Convert tuples of players to strings with names and positions
     mapping = Mapping(league_id=league_id)
     recommended_trades["Gives"] = [
-        ", ".join([
-            f"{mapping.player_id_to_player_name.get(player_id)} "
-            f"({mapping.player_id_to_player_position.get(player_id)})"
-            for player_id in player_ids
-        ])
+        ", ".join(
+            [
+                f"{mapping.player_id_to_player_name.get(player_id)} "
+                f"({mapping.player_id_to_player_position.get(player_id)})"
+                for player_id in player_ids
+            ]
+        )
         for player_ids in recommended_trades["Gives"]
     ]
     recommended_trades["Receives"] = [
-        ", ".join([
-            f"{mapping.player_id_to_player_name.get(player_id)} "
-            f"({mapping.player_id_to_player_position.get(player_id)})"
-            for player_id in player_ids
-        ])
+        ", ".join(
+            [
+                f"{mapping.player_id_to_player_name.get(player_id)} "
+                f"({mapping.player_id_to_player_position.get(player_id)})"
+                for player_id in player_ids
+            ]
+        )
         for player_ids in recommended_trades["Receives"]
     ]
     recommended_trades["With"] = recommended_trades["With"].map(mapping.user_id_to_display_name)
 
     return recommended_trades.sort_values("User Projection", ascending=False)
+
 
 def _get_recommended_trades(
     player_projections: pd.DataFrame,
@@ -111,14 +116,14 @@ def _get_recommended_trades(
         2-for-2 swap is possible).
     user_id : str
         The Sleeper user ID for the user to calculate trades for.
-    
+
     Returns
     -------
     list[dict]
         List of dictionaries with keys "With", "Gives", "Receives", "User Projection", and
         "Other Projection".
     """
-        
+
     # Create projections object with all projections, for use across all team types
     all_projections = Projections(
         player_ids=player_projections["player_id"],
@@ -132,40 +137,63 @@ def _get_recommended_trades(
     user_base_score = all_projections.get_max_possible_score(player_ids=user_players)
 
     # Create other players: maps user ID to set of player_id
-    other_players = player_projections[player_projections["user_id"] != user_id].groupby("user_id").agg({"player_id": set}).reset_index()
+    other_players = (
+        player_projections[player_projections["user_id"] != user_id]
+        .groupby("user_id")
+        .agg({"player_id": set})
+        .reset_index()
+    )
     other_players = {row["user_id"]: row["player_id"] for _, row in other_players.iterrows()}
 
     accepted_trades = []
 
     # For user, get all groups of players of up to specified size
-    for user_player_group in [combo for group_size in range(1, max_group_size + 1) for combo in itertools.combinations(user_players, group_size)]:
-
+    for user_player_group in [
+        combo
+        for group_size in range(1, max_group_size + 1)
+        for combo in itertools.combinations(user_players, group_size)
+    ]:
         # Loop through other players
         for other_user, other_player_ids in other_players.items():
-
             # Get base score for other player's roster
             other_base_score = all_projections.get_max_possible_score(player_ids=other_player_ids)
 
             # For other user, get all groups of players of up to specified size
-            for other_player_group in [combo for group_size in range(1, max_group_size + 1) for combo in itertools.combinations(other_player_ids, group_size)]:
-
+            for other_player_group in [
+                combo
+                for group_size in range(1, max_group_size + 1)
+                for combo in itertools.combinations(other_player_ids, group_size)
+            ]:
                 logger.info(f"Testing trade: user {user_player_group} other {other_player_group}")
 
                 # Create the modified rosters for this trade
-                proposed_user_players = (user_players - set(user_player_group)) | set(other_player_group)
-                proposed_other_players = (other_player_ids - set(other_player_group)) | set(user_player_group)
+                proposed_user_players = (user_players - set(user_player_group)) | set(
+                    other_player_group
+                )
+                proposed_other_players = (other_player_ids - set(other_player_group)) | set(
+                    user_player_group
+                )
 
                 # Calculate the max scores with the trade
-                proposed_user_score = all_projections.get_max_possible_score(player_ids=proposed_user_players)
-                proposed_other_score = all_projections.get_max_possible_score(player_ids=proposed_other_players)
+                proposed_user_score = all_projections.get_max_possible_score(
+                    player_ids=proposed_user_players
+                )
+                proposed_other_score = all_projections.get_max_possible_score(
+                    player_ids=proposed_other_players
+                )
 
-                if proposed_user_score > user_base_score and proposed_other_score >= other_base_score:
-                    accepted_trades.append({
-                        "With": other_user,
-                        "Gives": user_player_group,
-                        "Receives": other_player_group,
-                        "User Projection": proposed_user_score,
-                        "Other Projection": proposed_other_score,
-                    })
+                if (
+                    proposed_user_score > user_base_score
+                    and proposed_other_score >= other_base_score
+                ):
+                    accepted_trades.append(
+                        {
+                            "With": other_user,
+                            "Gives": user_player_group,
+                            "Receives": other_player_group,
+                            "User Projection": proposed_user_score,
+                            "Other Projection": proposed_other_score,
+                        }
+                    )
 
     return accepted_trades

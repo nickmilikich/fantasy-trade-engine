@@ -6,18 +6,21 @@ from utils.io import download_dataframe
 from utils.mapping import Mapping
 from utils.services import get_recommended_trades
 
+
 def main():
     st.title("Trade Recommendation App")
 
     # User inputs
     league_id = st.text_input("League ID", placeholder="Enter the league ID")
     year = st.number_input("Year", min_value=2000, max_value=2100, step=1, value=2024)
-    
+
     mapping = Mapping(league_id=league_id)
-    display_name = st.selectbox("Display name", placeholder="Select your display name", options=mapping.league_id_to_display_names[league_id])
-    max_group_size = st.number_input(
-        "Max Group Size", min_value=1, max_value=4, step=1, value=1
+    display_name = st.selectbox(
+        "Display name",
+        placeholder="Select your display name",
+        options=mapping.league_id_to_display_names[league_id],
     )
+    max_group_size = st.number_input("Max Group Size", min_value=1, max_value=4, step=1, value=1)
     positions = st.multiselect(
         "Positions",
         placeholder="Select positions to consider for trades (or leave blank to consider all)",
@@ -26,7 +29,9 @@ def main():
     other_users = st.multiselect(
         "Other Users",
         placeholder="Select users to consider for trades (or leave blank to consider all)",
-        options=[user for user in mapping.league_id_to_display_names[league_id] if user != display_name],
+        options=[
+            user for user in mapping.league_id_to_display_names[league_id] if user != display_name
+        ],
     )
 
     if positions == []:
@@ -57,6 +62,7 @@ def main():
 
                 # Download button
                 download_dataframe(trades_df, "recommended_trades.csv")
+
 
 if __name__ == "__main__":
     main()
